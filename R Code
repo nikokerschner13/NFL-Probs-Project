@@ -1,0 +1,441 @@
+---
+title: "Gambling Project"
+author: "Niko"
+date: "2/3/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+library(tidyverse)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+```{r}
+load("nfl_all_stats_and_scraping.RData")
+```
+
+
+
+```{r}
+hist(nfl_receivers_data_advanced_2019_2021$Age, xlab = "Age of Wide Outs", main = "Histogram of Wide Receiver Age")
+```
+
+```{r}
+hist(nfl_receivers_data_advanced_2019_2021$Yds, xlab = "Yds Total", ylab = " How many players", main = "Histogram of Wide Receiver Yds")
+
+```
+
+```{r}
+head(nfl_kickers_data_general_2003_2020)
+
+```
+```{r}
+
+kicking_df_new <- nfl_kickers_data_general_2003_2020 %>% 
+  mutate(kick_per = Scoring.FGM / Scoring.FGA)
+
+```
+
+```{r}
+hist(kicking_df_new$kick_per, breaks = 50, xlab = "Kicking percentage", main = "Kickers Field Goal Percentage")
+#Will have to filter by kick attempts eventually too, but could be interesting to see how having an accurate kicker like Justin Tucker helps your chance in winning
+```
+
+```{r}
+head(all_passers_general_df)
+```
+
+```{r}
+names(all_passers_general_df)[11] <- 'Passing Yards'
+```
+
+```{r}
+all_passers_general_df_label <- all_passers_general_df %>% 
+  mutate(good = Rate > 80) %>% 
+  filter(Att >99) %>% 
+  filter(good != 'NA')
+```
+
+```{r}
+all_receivers_advanced_df_labeled <- all_receivers_advanced_df %>% 
+  mutate(good = Yds > 500) %>% 
+  filter(Rec > 25) %>% 
+  filter(good != 'NA')
+
+```
+
+```{r}
+all_kickers_general_df_labeled <- kicking_df_new %>%
+  filter(Games.G > 10) %>% 
+  mutate(good = kick_per > .8) %>% 
+  filter(good != 'NA')
+  
+```
+
+```{r}
+all_runners_advanced_df_labeled <- all_runners_advanced_df %>% 
+  mutate(good = Yds > 500) %>% 
+  filter(Att > 25) %>% 
+  filter(good != 'NA')
+```
+
+```{r}
+all_passers_train <- all_passers_general_df_label %>% 
+  filter(year < 2017) %>% 
+  select(-2,-4,-30,-7) %>% 
+  mutate(good = as.numeric(good))
+all_passers_test <- all_passers_general_df_label %>% 
+  filter(year >=2017) %>% 
+  select(-2,-4,-30,-7) %>% 
+  mutate(good = as.numeric(good))
+
+
+```
+
+```{r}
+all_receivers_train <- all_receivers_advanced_df_labeled %>% 
+  filter(year <= 2020) %>% 
+  select(-2,-4,-23) %>% 
+  mutate(good = as.numeric(good))
+receivers_train1 <- as.numeric()
+all_receivers_test <- all_receivers_advanced_df_labeled %>% 
+  filter(year == 2021) %>% 
+  select(-2,-4,-23) %>% 
+  mutate(good = as.numeric(good))
+```
+
+```{r}
+all_kickers_train <- all_kickers_general_df_labeled %>% 
+  filter(year <2017) %>% 
+  select(-1,-2,-3,-4,-34,-35) %>% 
+  mutate(good = as.numeric(good))
+all_kickers_test <- all_kickers_general_df_labeled %>% 
+  filter(year >= 2017) %>% 
+  select(-1,-2,-3,-4,-34,-35) %>% 
+  mutate(good = as.numeric(good))
+```
+
+```{r}
+all_runners_train <- all_runners_advanced_df_labeled %>% 
+  filter(year <= 2020) %>% 
+  select(-2,-4,-16) %>% 
+  mutate(good = as.numeric(good))
+all_runners_test <- all_runners_advanced_df_labeled %>% 
+  filter(year == 2021) %>% 
+  select(-2,-4,-16) %>% 
+  mutate(good = as.numeric(good))
+```
+
+
+```{r}
+#lapply(all_kickers_train,class)
+
+```
+
+
+```{r}
+library(xgboost)
+pass_train_xg <- xgb.DMatrix(data = as.matrix(all_passers_train[, c(1:17, 19:27)]), label = as.numeric(all_passers_train$good))
+# Create test matrix
+pass_test_xg <- xgb.DMatrix(data = as.matrix(all_passers_test[, c(1:17, 19:27)]), label = as.numeric(all_passers_test$good))
+```
+
+```{r}
+#save(all_passers_train, file = "passer_test_data.rda")
+
+```
+
+```{r}
+receiver_train_xg <- xgb.DMatrix(data = as.matrix(all_receivers_train[, c(1:6, 8:21)]), label = as.numeric(all_receivers_train$good))
+# Create test matrix
+receiver_test_xg <- xgb.DMatrix(data = as.matrix(all_receivers_test[, c(1:6, 8:21)]), label = as.numeric(all_receivers_test$good))
+```
+
+```{r}
+kicker_train_xg <- xgb.DMatrix(data = as.matrix(all_kickers_train[, c(1:15, 17:29)]), label = as.numeric(all_kickers_train$good))
+# Create test matrix
+kicker_test_xg <- xgb.DMatrix(data = as.matrix(all_kickers_test[, c(1:15, 17:29)]), label = as.numeric(all_kickers_test$good))
+```
+
+```{r}
+runner_train_xg <- xgb.DMatrix(data = as.matrix(all_runners_train[, c(1:4 , 7:14)]), label = as.numeric(all_runners_train$good))
+# Create test matrix
+kicker_test_xg <- xgb.DMatrix(data = as.matrix(all_runners_test[, c(1:4 , 7:14)]), label = as.numeric(all_runners_test$good))
+```
+
+```{r}
+bst_pass<- xgboost(data = pass_train_xg, # Set training data
+             
+       
+               
+               
+              nrounds = 100, # Set number of rounds
+              early_stopping_rounds = 100, # Set number of rounds to stop at if there is no improvement
+               
+              verbose = 1, # 1 - Prints out fit
+              nthread = 1, # Set number of parallel threads
+              print_every_n = 20, # Prints out result every 20th iteration
+             
+              objective = "binary:logistic", # Set objective
+              eval_metric = "auc",
+              eval_metric = "error") # Set evaluation metric to use
+```
+
+
+```{r}
+# Extract importance
+imp_mat <- xgb.importance(model = bst_pass)
+# Plot importance (top 10 variables)
+xgb.plot.importance(imp_mat, top_n = 10)
+
+#(pass yards + 20*(pass TD) - 45*(interceptions thrown) - sack yards)/(passing attempts + sacks).
+```
+
+```{r}
+bst_catch<- xgboost(data = receiver_train_xg, # Set training data
+             
+       
+               
+               
+              nrounds = 100, # Set number of rounds
+              early_stopping_rounds = 100, # Set number of rounds to stop at if there is no improvement
+               
+              verbose = 1, # 1 - Prints out fit
+              nthread = 1, # Set number of parallel threads
+              print_every_n = 20, # Prints out result every 20th iteration
+             
+              objective = "binary:logistic", # Set objective
+              eval_metric = "auc",
+              eval_metric = "error") # Set evaluation metric to use
+```
+
+```{r}
+imp_mat <- xgb.importance(model = bst_catch)
+# Plot importance (top 10 variables)
+xgb.plot.importance(imp_mat, top_n = 10)
+```
+
+
+```{r}
+bst_kick<- xgboost(data = kicker_train_xg, # Set training data
+             
+       
+               
+               
+              nrounds = 100, # Set number of rounds
+              early_stopping_rounds = 100, # Set number of rounds to stop at if there is no improvement
+               
+              verbose = 1, # 1 - Prints out fit
+              nthread = 1, # Set number of parallel threads
+              print_every_n = 20, # Prints out result every 20th iteration
+             
+              objective = "binary:logistic", # Set objective
+              eval_metric = "auc",
+              eval_metric = "error") # Set evaluation metric to use
+```
+
+```{r}
+imp_mat <- xgb.importance(model = bst_kick)
+# Plot importance (top 10 variables)
+xgb.plot.importance(imp_mat, top_n = 10)
+```
+
+```{r}
+bst_run<- xgboost(data = runner_train_xg, # Set training data
+             
+       
+               
+               
+              nrounds = 100, # Set number of rounds
+              early_stopping_rounds = 100, # Set number of rounds to stop at if there is no improvement
+               
+              verbose = 1, # 1 - Prints out fit
+              nthread = 1, # Set number of parallel threads
+              print_every_n = 20, # Prints out result every 20th iteration
+             
+              objective = "binary:logistic", # Set objective
+              eval_metric = "auc",
+              eval_metric = "error") # Set evaluation metric to use
+```
+```{r}
+imp_mat <- xgb.importance(model = bst_run)
+# Plot importance (top 10 variables)
+xgb.plot.importance(imp_mat, top_n = 10)
+```
+
+```{r}
+library(caret)
+boost_preds_1 <- predict(bst_pass, pass_test_xg) # Create predictions for xgboost model
+
+pred_dat <- cbind.data.frame(boost_preds_1 , all_passers_test$good)#
+# Convert predictions to classes, using optimal cut-off
+boost_pred_class <- rep(0, length(boost_preds_1))
+boost_pred_class[boost_preds_1 >=0.5] <- 1
+
+
+t <- table(boost_pred_class, all_passers_test$good) # Create table
+confusionMatrix(t, positive = "1") # Produce confusion matrix
+```
+
+```{r}
+bst_mod_1 <- xgb.cv(data = pass_train_xg, # Set training data
+              
+              nfold = 5, # Use 5 fold cross-validation
+              eta = 0.3,
+              nrounds = 500, # Set number of rounds
+              early_stopping_rounds = 150, # Set number of rounds to stop at if there is no improvement
+               
+              verbose = 1, # 1 - Prints out fit
+              
+              nthread = 1, # Set number of parallel threads
+              
+              print_every_n = 100, # Prints out result every 100th iteration
+              
+              objective = "binary:logistic", 
+              eval_metric = "auc",
+              eval_metric = "error") # Set evaluation metric to use
+```
+
+```{r}
+bst_mod_2 <- xgb.cv(data = pass_train_xg, # Set training data
+              
+              nfold = 5, # Use 5 fold cross-validation
+              eta = 0.1, 
+              nrounds = 500, # Set number of rounds
+              
+              early_stopping_rounds = 150, # Set number of rounds to stop at if there is no improvement
+               
+              verbose = 1, # 1 - Prints out fit
+              
+              nthread = 1, # Set number of parallel threads
+              
+              print_every_n = 100, # Prints out result every 100th iteration
+              
+              objective = "binary:logistic", # Set objective
+              eval_metric = "auc",
+              eval_metric = "error") # Set evaluation metric to use
+```
+
+```{r}
+bst_mod_3 <- xgb.cv(data = pass_train_xg, # Set training data
+              
+              nfold = 5, # Use 5 fold cross-validation
+              eta = 0.05, 
+              nrounds = 500, # Set number of rounds
+              early_stopping_rounds = 150, # Set number of rounds to stop at if there is no improvement
+               
+              verbose = 1, # 1 - Prints out fit
+              
+              nthread = 1, # Set number of parallel threads
+              
+              print_every_n = 100, # Prints out result every 100th iteration
+              
+              objective = "binary:logistic", # Set objective
+              eval_metric = "auc",
+              eval_metric = "error") # Set evaluation metric to use
+```
+```{r}
+bst_mod_4 <- xgb.cv(data = pass_train_xg, # Set training data
+              
+              nfold = 5, # Use 5 fold cross-validation
+              eta = 0.01, 
+              nrounds = 500, # Set number of rounds
+              early_stopping_rounds = 150, # Set number of rounds to stop at if there is no improvement
+               
+              verbose = 1, # 1 - Prints out fit
+              
+              nthread = 1, # Set number of parallel threads
+              
+              print_every_n = 100, # Prints out result every 100th iteration
+              
+              objective = "binary:logistic", # Set objective
+              eval_metric = "auc",
+              eval_metric = "error") # Set evaluation metric to use
+```
+
+```{r}
+bst_mod_5 <- xgb.cv(data = pass_train_xg, # Set training data
+              
+              nfold = 5, # Use 5 fold cross-validation
+              eta = 0.005, 
+              nrounds = 500, # Set number of rounds
+              early_stopping_rounds = 150, # Set number of rounds to stop at if there is no improvement
+               
+              verbose = 1, # 1 - Prints out fit
+              nthread = 1, # Set number of parallel threads
+              print_every_n = 100, # Prints out result every 100th iteration
+              
+              objective = "binary:logistic", # Set objective
+              eval_metric = "auc",
+              eval_metric = "error") # Set evaluation metric to use
+```
+
+```{r}
+pd1 <- cbind.data.frame(bst_mod_1$evaluation_log[,c("iter", "test_error_mean")], rep(0.3, nrow(bst_mod_1$evaluation_log)))
+names(pd1)[3] <- "eta"
+# Extract results for model with eta = 0.1
+pd2 <- cbind.data.frame(bst_mod_2$evaluation_log[,c("iter", "test_error_mean")], rep(0.1, nrow(bst_mod_2$evaluation_log)))
+names(pd2)[3] <- "eta"
+# Extract results for model with eta = 0.05
+pd3 <- cbind.data.frame(bst_mod_3$evaluation_log[,c("iter", "test_error_mean")], rep(0.05, nrow(bst_mod_3$evaluation_log)))
+names(pd3)[3] <- "eta"
+# Extract results for model with eta = 0.01
+pd4 <- cbind.data.frame(bst_mod_4$evaluation_log[,c("iter", "test_error_mean")], rep(0.01, nrow(bst_mod_4$evaluation_log)))
+names(pd4)[3] <- "eta"
+# Extract results for model with eta = 0.005
+pd5 <- cbind.data.frame(bst_mod_5$evaluation_log[,c("iter", "test_error_mean")], rep(0.005, nrow(bst_mod_5$evaluation_log)))
+names(pd5)[3] <- "eta"
+# Join datasets
+plot_data <- rbind.data.frame(pd1, pd2, pd3, pd4, pd5)
+# Converty ETA to factor
+plot_data$eta <- as.factor(plot_data$eta)
+# Plot points
+tree_graph <- ggplot(plot_data, aes(x = iter, y = test_error_mean, color = eta))+
+  geom_point(alpha = 0.5) +
+  theme_bw() + # Set theme
+  theme(panel.grid.major = element_blank(), # Remove grid
+        panel.grid.minor = element_blank(), # Remove grid
+        panel.border = element_blank(), # Remove grid
+        panel.background = element_blank()) + # Remove grid 
+  labs(x = "Number of Trees", title = "Error Rate v Number of Trees",
+       y = "Error Rate", color = "Learning \n Rate")  # Set labels
+tree_graph
+```
+
+```{r}
+tree_graph2 <- ggplot(plot_data, aes(x = iter, y = test_error_mean, color = eta))+
+  geom_smooth(alpha = 0.5) +
+  theme_bw() + #theme
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        panel.background = element_blank()) + 
+  labs(x = "Number of Trees", title = "Error Rate v Number of Trees",
+       y = "Error Rate", color = "Learning \n Rate")  # Set labels
+tree_graph2
+```
+
+
+
+
